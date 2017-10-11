@@ -1,0 +1,121 @@
+== DNS-SAFE Project: DNS/DNSSEC {S}ecurity through {A}nalysis, {F}uzzing and {E}xploiting
+
+"`DNS-SAFE`" is an automated test suite that ensures that a nameserver implementation
+is security tested through the following aspects:
+
+* Analysis: static and runtime
+* Fuzzing: discovering stability issues
+* Exploiting: immune to known vulnerabilities
+
+
+=== Components
+
+The four main areas we test against are (priority according to this order):
+
+* Fuzzing
+* Exploiting
+* Runtime Analysis
+* Static Analysis
+
+
+=== Targets
+
+While we target all nameserver implementations, (NSD, BIND, Knot, PowerDNS, etc.),
+NSD is our initial priority.
+
+
+=== Fuzzing
+
+"`Retrace`" is a security vulnerability discovery tool:
+https://github.com/riboseinc/retrace
+
+This work utilizes "`retrace`" functionality to discover issues in nameserver
+implementations through fuzzing.
+
+
+==== Fuzz Directions
+
+There are 3 operations of the nameserver that we want to have fuzzed in both IPv4 and IPv6:
+
+* DNSSEC operations (UDP and TCP)
+* Zone transfer operations (TCP)
+* Name server lookups (UDP)
+
+For each mode, the following areas should be fuzzed:
+
+* Buffer overflows
+* Format strings
+* DoS (hangs, crashes)
+* Information leaks (out of bound reads)
+
+
+==== Retracing Client Tools
+
+Utilize Retrace on `dig` and `nslookup` to trigger any of the fuzz targets.
+
+Retrace string injection should focus on:
+
+1. `write()`
+2. `send()`
+
+The string inject modes should include:
+
+1. `INJECT_BUF_OVERFLOW`
+2. `INJECT_FORMAT_STR`
+3. `INJECT_SINGLE_HEX`
+
+Leverage larger payload packet sizes by using `EDNS0` or completely go through the 512 byte space (starting at offset 0 to 511) for UDP DNS packets.
+
+
+==== Retracing Nameservers
+
+The server side could be retraced by using string injection on the `read()` and `recv()` functions.
+
+One can run queries through `dnsperf` and allow retrace to crash the server.
+
+
+
+=== Exploiting
+
+TODO. Attempting to trigger known exploits remotely.
+
+
+=== Runtime Analysis
+
+TODO. `valgrind`.
+
+
+=== Static Analysis
+
+TODO. Such as `Klockwork`.
+
+
+
+
+
+
+=== Server Daemon And Monitoring
+
+The nameserver should be started as a docker container (built to run this test
+suite). This way we can ensure every single run of the suite is consistent and
+results reproducible.
+
+We probably have to build custom containers for different nameserver
+implementations to embed our tools.
+
+Server side resources that require monitoring during fuzzing:
+
+* nameserver processes and threads need to be monitored to see whether they
+have crashed, hanging or if they are growing indicating a memory leak
+
+* nameserver log files could contain memory addresses (in case of format
+strings) or corrupted data (indicating a stack or heap overflow)
+
+* Core dumps of the nameserver process
+
+
+=== References
+
+* Standcore's open-source https://www.standcore.com/dnsconformance.tgz[DNS conformance testing tool], written by John Levine and Paul Hoffman (who are huge figures in DNS)
+
+* https://docs.menandmice.com/display/MM/DNSSEC+monitoring+tools[Some DNSSEC Monitoring tools]
