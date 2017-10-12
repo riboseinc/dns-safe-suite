@@ -29,8 +29,14 @@ NSD is our initial priority.
 "`Retrace`" is a security vulnerability discovery tool:
 https://github.com/riboseinc/retrace
 
+
+
 This work utilizes "`retrace`" functionality to discover issues in nameserver
 implementations through fuzzing.
+
+Retrace modifies the behavior of dynamically-linked ELF (Linux/OpenBSD/FreeBSD/NetBSD) and
+Mach-O (macOS) binary executables. It has the ability to change the standard
+system calls in a number of different ways. This is done using a config file.
 
 
 ==== Fuzz Directions
@@ -47,11 +53,15 @@ For each mode, the following areas should be fuzzed:
 * Format strings
 * DoS (hangs, crashes)
 * Information leaks (out of bound reads)
+* Memory
+* Incomplete I/O
 
 
 ==== Retracing Client Tools
 
-Utilize Retrace on `dig` and `nslookup` to trigger any of the fuzz targets.
+Utilize Retrace on `dig` and `nslookup` to trigger any of the fuzz targets on
+the target nameservers. In this scenario we utilize client tools as a vehicle
+for our payloads which are injected in valid requests.
 
 Retrace string injection should focus on:
 
@@ -64,20 +74,63 @@ The string inject modes should include:
 2. `INJECT_FORMAT_STR`
 3. `INJECT_SINGLE_HEX`
 
-Leverage larger payload packet sizes by using `EDNS0` or completely go through the 512 byte space (starting at offset 0 to 511) for UDP DNS packets.
+Leverage larger payload packet sizes by using `EDNS0` or completely go through
+the 512 byte space (starting at offset 0 to 511) for UDP DNS packets.
 
 
 ==== Retracing Nameservers
 
-The server side could be retraced by using string injection on the `read()` and `recv()` functions.
+===== String Inject
+
+The server side could be retraced by using string injection on:
+
+1. `read()`
+2. `recv()`
+
+In case the nameserver has implemented different network system calls then these
+will be included as well.
+
+The string inject modes should include:
+
+1. `INJECT_BUF_OVERFLOW`
+2. `INJECT_FORMAT_STR`
+3. `INJECT_SINGLE_HEX`
+
+
+===== Network Fuzzing
+
+The server side network fuzzing should include the following syscalls with Retrace:
+
+1. socket(), accept(): NO_MEMORY, LIMIT_SOCKET
+2. connect(): ADDR_INUSE, NET_UNREACHABLE, CONN_TIMEOUT
+3. bind(), listen(): ADDR_INUSE
+4. send(), sendto(), sendmsg(): CONN_RESET, NO_MEMORY
+5. recv(), recvfrom(), recvmsg(): CONN_REFUSE, NO_MEMORY
+6. gethostbyname(), gethostbyaddr(): HOST_NOT_FOUND, SERVICE_NOT_AVAIL
+7. getaddrinfo(): HOST_NOT_FOUND, SERVICE_NOT_AVAIL, NO_MEMORY
 
 One can run queries through `dnsperf` and allow retrace to crash the server.
 
 
+===== Memory Fuzzing
+
+The `memoryfuzzing` option in Retrace will cause a percentage of `malloc()`,
+`realloc()` and `calloc()` calls to fail. The percentage is specified in a number
+(`float`) from `0` (no fail) to `1` (all fail). This is useful to discover places
+in the code where return value of allocators are not checked.
+
+
+===== Incomplete I/O
+
+The `incompleteio` option in Retrace will cause the `read()` / `write()` calls
+to randomly write/read less bytes than was asked. A common scenario that people
+forget to check.
+
 
 === Exploiting
 
-TODO. Attempting to trigger known exploits remotely.
+1. Attempting to trigger (known) vulnerabilities remotely.
+2. Attempt to bypass access controls.
 
 
 === Runtime Analysis
