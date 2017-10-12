@@ -29,14 +29,19 @@ NSD is our initial priority.
 "`Retrace`" is a security vulnerability discovery tool:
 https://github.com/riboseinc/retrace
 
-
-
 This work utilizes "`retrace`" functionality to discover issues in nameserver
 implementations through fuzzing.
 
 Retrace modifies the behavior of dynamically-linked ELF (Linux/OpenBSD/FreeBSD/NetBSD) and
 Mach-O (macOS) binary executables. It has the ability to change the standard
-system calls in a number of different ways. This is done using a config file.
+system calls in a number of different ways. The configuration of Retrace is done
+through a ASCII configuration file making it easy to reproduce tests and triggers.
+The ASCII configuration file allows for easy scripting in `bash`.
+
+Retrace should be dynamically loaded as a shared library at runtime of the nameserver.
+
+The seed of the Retrace random generator can be controlled with the `fuzzingseed`
+option, so that the results are repeatable and reproducable.
 
 
 ==== Fuzz Directions
@@ -63,6 +68,9 @@ Utilize Retrace on `dig` and `nslookup` to trigger any of the fuzz targets on
 the target nameservers. In this scenario we utilize client tools as a vehicle
 for our payloads which are injected in valid requests.
 
+We can consider the development of small tools that are identical to `dig` and
+`nslookup` but are easier to Retrace due to a smaller footprint.
+
 Retrace string injection should focus on:
 
 1. `write()`
@@ -79,6 +87,10 @@ the 512 byte space (starting at offset 0 to 511) for UDP DNS packets.
 
 
 ==== Retracing Nameservers
+
+Retracing nameservers gives the unique possibility of triggering memory and I/O
+faults. In addition arbitrary traffic can be injected in `read()` and `recv()`.
+
 
 ===== String Inject
 
@@ -99,15 +111,16 @@ The string inject modes should include:
 
 ===== Network Fuzzing
 
-The server side network fuzzing should include the following syscalls with Retrace:
+The server side network fuzzing should include the following syscalls and
+fuzzing types with Retrace:
 
-1. socket(), accept(): NO_MEMORY, LIMIT_SOCKET
-2. connect(): ADDR_INUSE, NET_UNREACHABLE, CONN_TIMEOUT
-3. bind(), listen(): ADDR_INUSE
-4. send(), sendto(), sendmsg(): CONN_RESET, NO_MEMORY
-5. recv(), recvfrom(), recvmsg(): CONN_REFUSE, NO_MEMORY
-6. gethostbyname(), gethostbyaddr(): HOST_NOT_FOUND, SERVICE_NOT_AVAIL
-7. getaddrinfo(): HOST_NOT_FOUND, SERVICE_NOT_AVAIL, NO_MEMORY
+1. `socket()`, `accept()`: NO_MEMORY, LIMIT_SOCKET
+2. `connect()`: ADDR_INUSE, NET_UNREACHABLE, CONN_TIMEOUT
+3. `bind()`, `listen()`: ADDR_INUSE
+4. `send()`, `sendto()`, sendmsg(): CONN_RESET, NO_MEMORY
+5. `recv()`, `recvfrom()`, recvmsg(): CONN_REFUSE, NO_MEMORY
+6. `gethostbyname()`, `gethostbyaddr()`: HOST_NOT_FOUND, SERVICE_NOT_AVAIL
+7. `getaddrinfo()`: HOST_NOT_FOUND, SERVICE_NOT_AVAIL, NO_MEMORY
 
 One can run queries through `dnsperf` and allow retrace to crash the server.
 
@@ -123,7 +136,7 @@ in the code where return value of allocators are not checked.
 ===== Incomplete I/O
 
 The `incompleteio` option in Retrace will cause the `read()` / `write()` calls
-to randomly write/read less bytes than was asked. A common scenario that people
+to randomly write/read less bytes than was asked. A common scenario that developers
 forget to check.
 
 
