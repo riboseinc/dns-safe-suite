@@ -71,7 +71,12 @@ for our payloads which are injected in valid requests.
 We can consider the development of small tools that are identical to `dig` and
 `nslookup` but are easier to Retrace due to a smaller footprint.
 
-Retrace string injection should focus on:
+Retrace is able to inject large strings (`AAAAAAAAAAAA..`), format strings
+(`%s%s%s%s..`) and single hex characters of any value `0x00:0xff` into a
+variety of network system calls. Any DNS client that establishes a connection
+for a query or zone transfer can be retraced and have strings injected.
+
+Retrace string injection should focus on network system calls such as:
 
 1. `write()`
 2. `send()`
@@ -92,37 +97,48 @@ Retracing nameservers gives the unique possibility of triggering memory and I/O
 faults. In addition arbitrary traffic can be injected in `read()` and `recv()`.
 
 
-===== String Inject
+===== String Injection
 
+Not only client tools can be retraced on the network syscalls but also the server side.
 The server side could be retraced by using string injection on:
 
 1. `read()`
 2. `recv()`
 
-In case the nameserver has implemented different network system calls then these
-will be included as well.
+(In case the nameserver has implemented different network system calls then these
+will be included as well.)
 
-The string inject modes should include:
+This will simulate a malicious/malformed client and could potentially trigger a buffer
+overflow or format string bug.
+
+The string inject modes (fuzzing type) should include:
 
 1. `INJECT_BUF_OVERFLOW`
 2. `INJECT_FORMAT_STR`
 3. `INJECT_SINGLE_HEX`
 
+The Retrace configuration for `stringinject` looks like this:
+`stringinject,[fuzzingtype],[syscall1]|[syscall2]|[syscallN],[count, hex value]:[offset],[fuzzing rate]`
+
 
 ===== Network Fuzzing
 
-The server side network fuzzing should include the following syscalls and
+The server side network fuzzing should include `fuzzing-net` for the following syscalls and
 fuzzing types with Retrace:
 
-1. `socket()`, `accept()`: NO_MEMORY, LIMIT_SOCKET
-2. `connect()`: ADDR_INUSE, NET_UNREACHABLE, CONN_TIMEOUT
-3. `bind()`, `listen()`: ADDR_INUSE
-4. `send()`, `sendto()`, sendmsg(): CONN_RESET, NO_MEMORY
-5. `recv()`, `recvfrom()`, recvmsg(): CONN_REFUSE, NO_MEMORY
-6. `gethostbyname()`, `gethostbyaddr()`: HOST_NOT_FOUND, SERVICE_NOT_AVAIL
-7. `getaddrinfo()`: HOST_NOT_FOUND, SERVICE_NOT_AVAIL, NO_MEMORY
+1. `socket()`, `accept()`. Fuzzing type: `NO_MEMORY`, `LIMIT_SOCKET`
+2. `connect()`. Fuzzing type: `ADDR_INUSE`, `NET_UNREACHABLE`, `CONN_TIMEOUT`
+3. `bind()`, `listen()`. Fuzzing type: `ADDR_INUSE`
+4. `send()`, `sendto()`, `sendmsg()`. Fuzzing type: `CONN_RESET, `NO_MEMORY`
+5. `recv()`, `recvfrom()`, `recvmsg()`. Fuzzing type: `CONN_REFUSE`, `NO_MEMORY`
+6. `gethostbyname()`, `gethostbyaddr()`. Fuzzing type: `HOST_NOT_FOUND`, `SERVICE_NOT_AVAIL`
+7. `getaddrinfo()`. Fuzzing type: `HOST_NOT_FOUND`, `SERVICE_NOT_AVAIL`, `NO_MEMORY`
 
-One can run queries through `dnsperf` and allow retrace to crash the server.
+One can run queries through `dnsperf` and allow retrace to crash the server in case
+there is no correct check on network error conditions.
+
+The Retrace configuration for `fuzzing-net` looks like this:
+`fuzzing-net,[syscall],[fuzzing type],[fuzzing rate]`
 
 
 ===== Memory Fuzzing
@@ -132,12 +148,18 @@ The `memoryfuzzing` option in Retrace will cause a percentage of `malloc()`,
 (`float`) from `0` (no fail) to `1` (all fail). This is useful to discover places
 in the code where return value of allocators are not checked.
 
+The Retrace configuration for `memoryfuzzing` looks like this:
+`memoryfuzzing,[fuzzing rate]`
+
 
 ===== Incomplete I/O
 
 The `incompleteio` option in Retrace will cause the `read()` / `write()` calls
 to randomly write/read less bytes than was asked. A common scenario that developers
 forget to check.
+
+The Retrace configuration for `incompleteio` looks like this:
+`incompleteio,[fuzzing rate]`
 
 
 === Exploiting
@@ -154,10 +176,6 @@ TODO. `valgrind`.
 === Static Analysis
 
 TODO. Such as `Klockwork`.
-
-
-
-
 
 
 === Server Daemon And Monitoring
